@@ -18,7 +18,7 @@ function onOpen(e) {
   SpreadsheetApp.getUi() // Or DocumentApp, SlidesApp, or FormApp.
       .createMenu('Import data')
       .addItem('Update crew data', 'importCrewData')
-      .addSeperator()
+      .addSeparator()
       .addItem('Create backup sheet', 'createBackup')
       .addItem('Restore backup sheet', 'restoreBackup')
       .addToUi();
