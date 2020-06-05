@@ -7,7 +7,7 @@
  */
  
  /* Used to identify the file on Google Drive that contains data from disruptorbeam.com/player */
- const GOOGLE_DRIVE_FILEID = 'INSERT_ID_HERE'
+ const GOOGLE_DRIVE_FILEID = 'INSERT_ID_HERE';
  
 /**
  * Adds menu items for importing data
@@ -100,15 +100,13 @@ function createColumnUpdaters_() {
   ];
 }
 
-/** Imports crew data from an JSON file on
+/** Imports crew data from an JSON file on */
 function importCrewData() {
   let columnUpdaters = createColumnUpdaters_();
   let parsedData = importData_();
   let app = SpreadsheetApp;
   let sheet = app.getActiveSheet();
   let crewDict = new Map();
-
-  let 
 
   for (i in parsedData.player.character.crew) {
     var character = parsedData.player.character.crew[i];
