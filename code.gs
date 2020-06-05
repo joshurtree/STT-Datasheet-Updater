@@ -82,10 +82,9 @@ function createColumnUpdaters_() {
     
   return [
     noUpdate,
-    function(data, h, v) { return true; },
-    noUpdate, noUpdate, byName, byName,
-    function(data, h, v) { return data.level == 100 && data.equipment_rank == 9 && data.rarity == data.max_rarity; },
-    function(data, h, v) { let values = []; for (equip in data.equipment) {values.push(data.equipment[equip][0]); }; return values.join(" "); },
+    (data, h, v) => true,
+    noUpdate, noUpdate, byName, byName, noUpdate,
+    (data, h, v) => { let values = []; for (equip in data.equipment) {values.push(data.equipment[equip][0]); }; return values.join(" "); },
     custom("equipment_rank"), noUpdate, noUpdate, noUpdate, noUpdate,
     stat, stat, stat,
     stat, stat, stat,
