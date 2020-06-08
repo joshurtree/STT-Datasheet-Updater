@@ -11,16 +11,24 @@ Updates a Google sheet containing data exported from datacore.app.
 7. Reload the spreadsheet an additional menu call Import data will be added.
 
 ## Usage instructions
+### Importing crew data
 1. Goto  https://texteditor.co and open the file you created on Google Drive.
 2. Replace the contents with code from https://stt.disruptorbeam.com/player.
 3. Select the sheet that contains the data exported from datacore.app.
 4. If a backup is needed the select Import Data -> Create backup sheet.
 5. Select Import Data -> Update crew data.
 
+### Importing item data
+1. Goto  https://texteditor.co and open the file you created on Google Drive.
+2. Replace the contents with code from https://stt.disruptorbeam.com/player.
+3. Select the sheet where you want the data to go
+4. If a backup is needed the select Import Data -> Create backup sheet.
+5. Select Import Data -> Update item data
+
 ## Google authentication on first use
 Google requires you to review permissions when first using the code. After you sign in to your account it will give you a page that looks like.
 
 ![Google authorisation](https://github.com/joshurtree/STT-Datasheet-Updater/blob/master/authentication.png)
 
-IF YOU TRUST THE CODE click on Advanced and then "Goto PROJECT NAME (unsafe)" to get to the permissions page. It will list all the permissions you will be allowing the code to use. If you happy that it won't destroy all your files then authorise them.
+IF YOU TRUST THE CODE click on Advanced and then "Goto {{PROJECTNAME}} (unsafe)" to get to the permissions page. It will list all the permissions you will be allowing the code to use. If you happy that it won't destroy all your files then authorise them.
 
