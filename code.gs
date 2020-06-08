@@ -6,8 +6,8 @@
  * Released under an Apache 3.0 licence
  */
  
- /* Used to identify the file on Google Drive that contains data from disruptorbeam.com/player */
- const GOOGLE_DRIVE_FILEID = 'INSERT_ID_HERE';
+/* Used to identify the file on Google Drive that contains data from disruptorbeam.com/player */
+const GOOGLE_DRIVE_FILEID = 'INSERT_ID_HERE';
  
 /**
  * Adds menu items for importing data
@@ -17,7 +17,8 @@ function onOpen(e) {
   // Add a custom menu to the spreadsheet.
   SpreadsheetApp.getUi() // Or DocumentApp, SlidesApp, or FormApp.
       .createMenu('Import data')
-      .addItem('Update crew data', 'importCrewData')
+      .addItem('Import crew data', 'importCrewData')
+      .addItem('Import item data', 'importItemData')
       .addSeparator()
       .addItem('Create backup sheet', 'createBackup')
       .addItem('Restore backup sheet', 'restoreBackup')
@@ -37,6 +38,153 @@ function createBackup() {
 }
 
 /** Restores a backup of the active sheet */
+function restoreBackup() {
+  let ss = SpreadsheetApp.getActive();
+  let targetSheet = ss.getActiveSheet();
+  let backupSheet = ss.getSheetByName(targetName + ' (backup)');
+  
+  if (backupSheet != null) {_
+    replaceContents_(targetSheet, backupSheet.getRange(1, 1, backupSheet.getLastRow(), backupSheet.getLastColumn()).getValues());
+  } else {
+    SpreadsheetApp.getUi().alert('There is no backup sheet!');
+  }
+}
+
+function replaceContents_(sheet, newContent) {
+  sheet.clearContents();
+  sheet.getRange(1, 1, newContent.length, newContent[0].length).setValues(newContent);
+}
+
+function createColumnUpdaters_() {
+  const returnIfDefined = (value, defaultValue) => value ? value : defaultValue;
+  const byName = (data, header, value) => returnIfDefined(data[header.toLowerCase().replace(/\s/g, "_")], value);
+  const stat = function(data, header, value) {
+    let name = header.split(" ")[0].toLowerCase() +  "_skill";
+    let type = header.split(" ")[1];
+    let skills = new Object(data.skills);
+    
+    if (!Object.keys(skills).includes(name)) 
+      return value;
+    
+    if (type != "core")
+      type = "range_" + type;
+      
+    return data.skills[name][type]
+  };
+  
+  const noUpdate = (d, h, value) => value;
+  const ship = (data, header, value) => byName(data["ship_battle"], header, 0);
+  const custom = function(path) { return function(data, h, v) { 
+    let indicies = path.split("/");
+    let retVal = data;
+    
+    for (index in indicies) 
+      retVal = retVal[indicies[index]];
+    
+    return retVal;
+  }};
+    
+  return [
+    noUpdate,
+    (data, h, v) => true,
+    noUpdate, noUpdate, byName, byName, noUpdate,
+    (data, h, v) => { let values = []; for (equip in data.equipment) {values.push(data.equipment[equip][0]); }; return values.join(" "); },
+    custom("equipment_rank"), noUpdate, noUpdate, noUpdate, noUpdate,
+    stat, stat, stat,
+    stat, stat, stat,
+    stat, stat, stat,
+    stat, stat, stat,
+    stat, stat, stat,
+    stat, stat, stat,
+    noUpdate, noUpdate, noUpdate,
+    custom("action/bonus_amount"), custom("action/initial_cooldown"), custom("action/duration"), custom("action/cooldown"),
+    noUpdate, noUpdate, noUpdate, noUpdate, noUpdate,
+    ship, ship, ship, ship, noUpdate
+  ];
+}
+
+function import100Crew_() {
+ var allCrew = importrange('https://docs.google.com/spreadsheets/d/162zQytmTQBMm1zvsbtDw-AL4IzzAeIVas1wsAm7rBhI', 'Crew Stats!A:L');
+}
+
+/** Imports crew data from an JSON file on */
+function importCrewData() {
+  let columnUpdaters = createColumnUpdaters_();
+  let parsedData = importData_();
+  let app = SpreadsheetApp;
+  let sheet = app.getActiveSheet();
+  let crewMap = new Map();
+
+  for (i in parsedData.player.character.crew) {
+    var character = parsedData.player.character.crew[i];
+    
+    if (!character.in_buy_back_state) {
+      if (crewMap.has(character.name)) 
+        character.duplicate = crewMap.get(character.name);
+      else
+        character.duplicate = false;
+        
+      crewMap.set(character.name, character);
+    }
+  }
+  
+  let headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
+  let dataRange = sheet.getRange(2, 1, sheet.getLastRow(), sheet.getLastColumn());
+  let sheetData = dataRange.getValues();
+  let outputData = new Array();
+  outputData.push(headers);
+  
+  let charactersUpdated = 0;
+  let charactersFrozen = 0;
+  
+  for (let row = 0; row < sheetData.length; ++row) {
+    let characterName = sheetData[row][0];
+    //console.info("Looking at " + characterName);
+   
+    if (crewMap.has(characterName)) {
+      console.info("Character " + characterName + " being updated");
+      let character = crewMap.get(characterName);
+      
+      while (character) {
+        let outputRow = new Array();
+        for (let column = 0; column < headers.length; ++column) 
+          outputRow.push(columnUpdaters[column](character, headers[column], sheetData[row][column]));
+        
+        outputData.push(outputRow);
+        character = character.duplicate;
+        ++charactersUpdated;
+      }
+      
+      crewMap.delete(characterName);
+    } else if (sheetData[row][1] && isImortalised(sheetData[row])) {
+      // Frozen
+      sheetData[row][6] = 1;
+      outputData.push(sheetData[row]);
+      ++charactersFrozen;
+    } else {
+      // TODO: Use 100 stat
+    }
+  }
+  
+  replaceContents_(sheet, outputData);
+  SpreadsheetApp.getUi().alert(charactersUpdated.toString() + " characters updated and " + charactersRemoved.toString() + " characters removed.");
+}
+
+/** Import Name, Rarity and quantity owned of every item into active sheet */
+function importItemData() {
+  let items = importData_().player.character.items;
+  let output = new Array();
+  
+  output.push(['Name', 'Rarity', 'Quantity owned']);
+  
+  for (i in items) {
+    let item = items[i];
+    output.push([item.name, item.rarity, item.quantity]);
+    console.info(item.name + ": " + item.quantity.toString());
+  }
+  
+  replaceContents_(SpreadsheetApp.getActiveSheet(), output);
+}
 function restoreBackup() {
   let ss = SpreadsheetApp.getActive();
   let targetName = ss.getActiveSheet().getName();
