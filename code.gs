@@ -52,7 +52,7 @@ function importAllData() {
   IMPORT_FUNCS.forEach(info => {
     try {
       let data = fetchData_();
-      importData_(info, true);
+      importData_(info, data, true);
       ++successes;
     } catch (e) {
       if (e != BATCH_IMPORT_ERROR)
