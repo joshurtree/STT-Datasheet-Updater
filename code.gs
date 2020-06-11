@@ -8,76 +8,51 @@
  
 /* Used to identify the file on Google Drive that contains data from disruptorbeam.com/player */
 const GOOGLE_DRIVE_FILEID = 'INSERT_ID_HERE';
- 
+
+const IMPORT_FUNCS = [
+  { name : 'crew', func : importCrewData_ },
+  { name : 'item', func : importItemData_ },
+  { name : 'voyage', func : importVoyageData_ },
+  { name : 'event', func : importEventData_ }
+];
+
+const doImport_ = (index) => importData_(IMPORT_FUNCS[0], fetchData_())
+const crewDataImport = () => doImport_(0); 
+const itemDataImport = () => doImport_(1);
+const voyageDataImport = () => doImport_(2);
+const eventDataImport = () => doImport_(3);
+
 /**
  * Adds menu items for importing data
  * @param {Event} e The onOpen event.
  */
 function onOpen(e) {
   // Add a custom menu to the spreadsheet.
-  SpreadsheetApp.getUi() // Or DocumentApp, SlidesApp, or FormApp.
+  let menu = SpreadsheetApp.getUi() 
       .createMenu('Import data')
-      .addItem('Import crew data', 'importCrewData')
-      .addItem('Import item data', 'importItemData')
-      .addItem('Import voyage data', 'importVoyageData')
-      .addSeparator()
       .addItem('Import all data', 'importAllData')
-      .addToUi();
+      .addSeparator();
+      
+  IMPORT_FUNCS.forEach(info => menu.addItem(`Import ${info.name} data`, `${info.name}DataImport`));
+  menu.addToUi();
 }
 
-function importData_() {
-  let file = DriveApp.getFileById(GOOGLE_DRIVE_FILEID);
-  return JSON.parse(file.getBlob().getDataAsString());
-}
-
-function replaceContents_(sheet, newContent) {
-  sheet.clearContents();
-  sheet.getRange(1, 1, newContent.length, newContent[0].length).setValues(newContent);
-}
-
-function getSheetAsRange_(sheet) {
-  return sheet.getRange(1, 1, sheet.getLastRow(), sheet.getLastColumn());
-}
+fetchData_ = () => JSON.parse(DriveApp.getFileById(GOOGLE_DRIVE_FILEID)
+                                      .getBlob()
+                                      .getDataAsString());
 
 const BATCH_IMPORT_ERROR = 363;
 const OCCUPIED_RANGE_NOTE = "Data sheet used";
-const OCCUPIED_PROMPT = `You are replacing different an existing import sheet. 
+const OCCUPIED_PROMPT = `The sheet you are using already contains data that will be deleted. 
                           Do you want to do this?`;
-const OCCUPIED_ERROR = 'Sheet already used';
-
-function getTargetSheet_(name, create) {
-  let ss = SpreadsheetApp.getActiveSpreadsheet(); 
-  let range = ss.getRangeByName(name);
-  
-  if (range == null && create) {
-    range = ss.getActiveSheet().getRange(1, 1);
-    let overlaps = ss.getNamedRanges().filter(r => range.getSheet() == r.getRange().getSheet());
-    if (overlaps.length != 0) {
-      let ui = SpreadsheetApp.getUi();
-      let response = ui.alert(OCCUPIED_PROMPT,
-                              ui.ButtonSet.YES_NO);
-                             
-      if (response != ui.Button.YES)
-        throw OCCUPIED_ERROR;
-        
-      overlaps.forEach(r => ss.removeNamedRange(r.getName()));
-    } 
-    ss.setNamedRange(name, range);
-  } 
-    
-  if (range == null)
-    throw BATCH_IMPORT_ERROR;
-  
-  return range.getSheet();
-}
 
 function importAllData() {
-  const allDataFuncs = [ importCrewData, importItemData, importVoyageData ];
   let successes = 0;
   
-  allDataFuncs.forEach(func => {
+  IMPORT_FUNCS.forEach(info => {
     try {
-      func(true);
+      let data = fetchData_();
+      importData_(info, true);
       ++successes;
     } catch (e) {
       if (e != BATCH_IMPORT_ERROR)
@@ -90,69 +65,136 @@ function importAllData() {
   SpreadsheetApp.getUi().alert(message); 
 }
 
-function createColumnUpdaters_() {
-  const stat = (skill, type) => (data, id) => {
-    let name = skill +  '_skill';
-    let skills = new Object(data.skills);
+function importData_(info, data = null, batch = false) {
+  let ss = SpreadsheetApp.getActiveSpreadsheet(); 
+  let rangeName = info.name + "DataImport";
+  let range = ss.getRangeByName(rangeName);
+  
+  if (range == null && !batch) {
+    range = ss.getActiveSheet().getRange(1, 1);
+      
+    if (range.getSheet().getLastRow() > 0) {
+      let ui = SpreadsheetApp.getUi();
+      let response = ui.alert(OCCUPIED_PROMPT, ui.ButtonSet.YES_NO);
+                             
+      if (response != ui.Button.YES)
+        return;        
+    }
     
-    if (!Object.keys(skills).includes(name)) 
-      return 0;
+    ss.setNamedRange(rangeName, range);
+  } 
+    
+  if (range == null)
+    throw BATCH_IMPORT_ERROR;
+  
+  if (info[0] == 'crew' && sheet.getLastRow() > 1) {
+    // Attempt to find frozen crew in sheet
+    let crewNames = sheet.getSheetValues(2, 1, sheet.getLastRow()).flat(); 
+    let archetypeIds = sheet.getSheetValues(2, sheet.getLastColumn(), sheet.getLastRow()).flat();
+    
+    for (i in parsedData.player.character.stored_immortals) {
+      let immortal = parsedData.player.character.stored_immortals[i];
+      let crewIndex = archetypeIds.indexOf(immortal.id);
+      
+      if (crewIndex >= 0) {
+        // Add to active crew
+        data.crew.push({
+          'name' : crewNames[crewIndex],
+          'frozen' : true,
+          'copies' : immortal.quantity});
+      }
+    }
+  }
+
+  let newContent = info.func(data);
+  range.getSheet().clearContents();
+  range.getSheet().getRange(1, 1, newContent.length, newContent[0].length).setValues(newContent);
+}
+
+function createColumnUpdaters_(immortalHeaders) {
+  const playerSkill = (skill, type) => {
+    let name = skill +  '_skill';
     
     if (type != 'core')
       type = 'range_' + type;
+    
+    return (data, id) => {
+      let skills = new Object(data.skills);
+    
+      if (!Object.keys(skills).includes(name)) 
+        return 0;
+    
       
-    return data.skills[name][type]
+      return data.skills[name][type];
+    };
   };
   
   const value = val => (d, id) => val;
-  const fromPlayer = path => (data, id) => {
+  const fromPlayer = path => {
     let indicies = path.split('/');
-    let retVal = data;
+    return (data, id) => {
+      let retVal = data;
     
-    for (index in indicies) 
-      retVal = retVal[indicies[index]];
+      for (index in indicies) 
+        retVal = retVal[indicies[index]];
     
-    return retVal;
-  }
-  const fromImmortals = index => (pd, id) => id[index];
-  const fromImmortalsNum = index => (pd, id) => parseInt(id[index].slice(1));
-  const parseCollections = (pd, id) => ""; // TODO
-  const inPortal = (pd, id) => id[31] == 'y';
+      return retVal;
+    };
+  };
+  
+  const fromImmortals = name => { 
+    let index = immortalHeaders[1].indexOf(name); 
+    return (pd, id) => id[index];
+  };
+  
+  const immortalSkill = (skill, type) => {
+    let index = immortalHeaders[0].indexOf(skill) + immortalHeaders[1].indexOf(type) 
+                  - immortalHeaders[0].indexOf("Command");
+
+    return (pd, id) => id[index];
+  };
+  
+  const fromImmortalsNum = name => {
+    let index = immortalHeaders[1].indexOf(name);
+    return (pd, id) => parseInt(id[index].slice(1));
+  };
+  
+  let rarityIndex = immortalHeaders[1].indexOf('Stars');
+  let collectionsIndex = immortalHeaders[1].indexOf('Collection');
+  let rarityMap = ["", ", Common", ", Uncommon", ", Rare"];
+  const collections = (pd, id) => [id[collectionsIndex], id[rarityIndex] <= 3 ? rarityMap[id[rarityIndex]] : ""].join(', ');
   
   return [[
     fromPlayer('name'), value(true), fromPlayer('short_name'),
     fromPlayer('max_rarity'), fromPlayer('rarity'), fromPlayer('level'), value(0),
     (data, id) => { let values = []; for (equip in data.equipment) {values.push(data.equipment[equip][0]); }; return values.join(' '); },
-    fromPlayer('equipment_rank'), inPortal, parseCollections, 
-    fromImmortalsNum(26), value(""),
-    stat('command', 'core'), stat('command', 'min'), stat('command', 'max'),
-    stat('diplomacy', 'core'), stat('diplomacy', 'min'), stat('diplomacy', 'max'),
-    stat('engineering', 'core'), stat('engineering', 'min'), stat('engineering', 'max'),
-    stat('medicine', 'core'), stat('medicine', 'min'), stat('medicine', 'max'),
-    stat('science', 'core'), stat('science', 'min'), stat('science', 'max'),
-    stat('security', 'core'), stat('security', 'min'), stat('security', 'max'),
-    fromImmortals(21), fromPlayer('action/name'), 
-    (data, id) => ['Attack','Evasion','Accuracy'][data.action.boost_type],
-    fromPlayer('action/bonus_amount'), fromPlayer('action/initial_cooldown'), fromPlayer('action/duration'), fromPlayer('action/cooldown'),
-    value(''), value(''), value(''), value(''), value(''), value(''), value(''),
-    fromPlayer('archetype_id')
+    fromPlayer('equipment_rank'), fromImmortals('Portal'), collections, 
+    fromImmortalsNum('VOY Rank'), fromImmortals('GPairs'),
+    playerSkill('command', 'core'), playerSkill('command', 'min'), playerSkill('command', 'max'),
+    playerSkill('diplomacy', 'core'), playerSkill('diplomacy', 'min'), playerSkill('diplomacy', 'max'),
+    playerSkill('engineering', 'core'), playerSkill('engineering', 'min'), playerSkill('engineering', 'max'),
+    playerSkill('medicine', 'core'), playerSkill('medicine', 'min'), playerSkill('medicine', 'max'),
+    playerSkill('science', 'core'), playerSkill('science', 'min'), playerSkill('science', 'max'),
+    playerSkill('security', 'core'), playerSkill('security', 'min'), playerSkill('security', 'max'),
+    fromImmortals('Traits'), fromPlayer('archetype_id')
+    // Not using ship stats for now
+    //fromPlayer('action/name'), 
+    //(data, id) => ['Attack','Evasion','Accuracy'][data.action.boost_type],
+    //fromPlayer('action/bonus_amount'), fromPlayer('action/initial_cooldown'), fromPlayer('action/duration'), fromPlayer('action/cooldown'),
+    //value(''), value(''), value(''), value(''), value(''), value(''), value(''),
   ],
   [
-    fromImmortals(0), fromPlayer('frozen'), fromImmortals(2),
-    fromImmortals(1), fromImmortals(1), value(100), fromPlayer('copies'),
-    value(''), value(9), inPortal, parseCollections,
-    fromImmortalsNum(26), value(''),
-    fromImmortals(3), fromImmortals(4), fromImmortals(5),
-    fromImmortals(6), fromImmortals(7), fromImmortals(8),
-    fromImmortals(9), fromImmortals(10), fromImmortals(11),
-    fromImmortals(12), fromImmortals(13), fromImmortals(14),
-    fromImmortals(15), fromImmortals(16), fromImmortals(17),
-    fromImmortals(18), fromImmortals(19), fromImmortals(20),
-    fromImmortals(21), value(''), 
-    value(''), value(''),
-    value(''), value(''), value(''), value(''), value(''),
-    value(''), value(''), value(''), value(''), value(''),
-    fromPlayer('archetype_id', '')
+    fromImmortals("Name"), fromPlayer('frozen'), fromImmortals("Variant"),
+    fromImmortals("Stars"), fromImmortals("Stars"), value(100), fromPlayer('copies'),
+    value(''), value(9), fromImmortals('Portal'), collections,
+    fromImmortalsNum('VOY Rank'), fromImmortals('GPairs'),
+    immortalSkill('Command', 'Base'), immortalSkill('Command', 'Min'), immortalSkill('Command', 'Max'),
+    immortalSkill('Diplomacy', 'Base'), immortalSkill('Diplomacy', 'Min'), immortalSkill('Diplomacy', 'Max'),
+    immortalSkill('Engineering', 'Base'), immortalSkill('Engineering', 'Min'), immortalSkill('Engineering', 'Max'),
+    immortalSkill('Medicine', 'Base'), immortalSkill('Medicine', 'Min'), immortalSkill('Medicine', 'Max'),
+    immortalSkill('Science', 'Base'), immortalSkill('Science', 'Min'), immortalSkill('Science', 'Max'),
+    immortalSkill('Security', 'Base'), immortalSkill('Security', 'Min'), immortalSkill('Security', 'Max'),
+    fromImmortals('Traits'), fromPlayer('archetype_id', '')
   ]];
 }
 
@@ -168,66 +210,43 @@ class CrewMap extends Map {
 }
 
 /** Imports crew data from an JSON file on */
-function importCrewData(batch) {
-  let app = SpreadsheetApp;
-  let sheet = getTargetSheet_('RawCrewData', !batch);
-  // Data from The Big Book of Backend Data
-  let immortalss = app.openById('1iYP_XqIvaGKgvINqk7vaQwfYhaSIXWatD3YD09DAXwY');
-  let immortalData = getSheetAsRange_(immortalss.getSheetByName('Raw Crew Data')).getValues();
-  let [playerUpdaters, immortalUpdaters] = createColumnUpdaters_();
-  let parsedData = importData_();
+function importCrewData_(data) {
+  // Data from Timelines Backend Stats Super Hyper Edition
+  let immortalSheet = SpreadsheetApp.openById('1czPEYhyNszsx7BqzYsbicAHKK15w4hjTmYiSp_jKsgg')
+                                    .getSheetByName('Data');
+  let immortalHeaders = immortalSheet.getSheetValues(2, 1, 2, immortalSheet.getLastColumn());
+  let immortalData = immortalSheet.getSheetValues(4, 1, immortalSheet.getLastRow() - 4, immortalSheet.getLastColumn());
+  let [playerUpdaters, immortalUpdaters] = createColumnUpdaters_(immortalHeaders);
   let crewMap = new CrewMap();
   
   // Setup map of active crew
-  for (i in parsedData.player.character.crew) {
-    let character = parsedData.player.character.crew[i];
+  for (i in data.player.character.crew) {
+    let character = data.player.character.crew[i];
     
     if (!character.in_buy_back_state) {
       character.frozen = false;
       character.copies = 1;
-      
       crewMap.add(character);
     }
   }
-  
-  if (sheet.getLastRow() > 1) {
-    // Attempt to find frozen crew
-    let crewNames = sheet.getRange(2, 1, sheet.getLastRow()).getValues().flat(); 
-    let archetypeIds = sheet.getRange(2, sheet.getLastColumn(), sheet.getLastRow()).getValues().flat();
     
-    for (i in parsedData.player.character.stored_immortals) {
-      let immortal = parsedData.player.character.stored_immortals[i];
-      let crewIndex = archetypeIds.indexOf(immortal.id);
-      
-      if (crewIndex >= 0) {
-        let crewName = crewNames[crewIndex];
-        crewMap.add({
-          'name' : crewName,
-          'frozen' : true,
-          'archtype_id' : immortal.id, 
-          'copies' : immortal.quantity
-        });
-      }
-    }
-  }
-  
   let outputData = new Array();
 
   const headers = [
     'Name',	'Have', 'Short name', 
     'Max rarity', 'Rarity', 'Level', 'Frozen', 
     'Equipment', 'Tier', 'In portal', 'Collections',
-    'Voyage Rank', 'Gauntlet Rank',
+    'Voyage Rank', 'Gauntlet Pairs',
     'Command Core', 'Command Min', 'Command Max',
     'Diplomacy Core', 'Diplomacy Min', 'Diplomacy Max', 
     'Engineering Core', 'Engineering Min', 'Engineering Max',
     'Medicine Core', 'Medicine Min', 'Medicine Max',
     'Science Core', 'Science Min', 'Science Max',
     'Security Core', 'Security Min', 'Security Max',
-    'Traits', 'Action name', 'Boosts Amount',
+    'Traits', /* 'Action name', 'Boosts Amount',
     'Initialize	Duration', 'Cooldown', 'Bonus Ability',
     'Trigger Uses per Battle (Not Used)', 'Handicap Type (Not Used)','Handicap Amount (Not Used)',
-    'Accuracy', 'Crit Bonus', 'Crit Rating', 'Evasion', 'Charge Phases (Not Used)',
+    'Accuracy', 'Crit Bonus', 'Crit Rating', 'Evasion', 'Charge Phases (Not Used)', */
     'Character ID'];
   outputData.push(headers);
   
@@ -240,7 +259,7 @@ function importCrewData(batch) {
     if (crewName == '')
       continue;
       
-    let crew = crewMap.has(crewName) ? crewMap.get(crewName) : { 'name' : crewName, 'frozen' : false, 'copies' : 0 };
+    let crew = crewMap.has(crewName) ? crewMap.get(crewName) : { name : crewName, frozen : false, copies : 0 };
           
     while (crew) {
       let outputRow = [];
@@ -248,8 +267,7 @@ function importCrewData(batch) {
       
       for (let column = 0; column < headers.length; ++column)  
         outputRow.push(updaters[column](crew, immortalData[row]));
-      
-      if (crew.frozen) 
+            if (crew.frozen) 
         crewFrozen += crew.copies;
       else
         crewOwned += crew.copies;
@@ -259,14 +277,13 @@ function importCrewData(batch) {
     }
   }
   
-  replaceContents_(sheet, outputData);
-  app.getUi().alert(`You own ${crewOwned} crew and have ${crewFrozen} in the freezer.`);
+  //app.getUi().alert(`You own ${crewOwned} crew and have ${crewFrozen} in the freezer.`);
+  return outputData;
 }
 
 /** Import Name, Rarity and quantity owned of every item into active sheet */
-function importItemData(batch) {
-  let targetSheet = getTargetSheet_('RawItemData', !batch);
-  let items = importData_().player.character.items;
+function importItemData_(data) {
+  let items = data.player.character.items;
   let outputMap = new CrewMap();
   let output = [];
   
@@ -285,14 +302,12 @@ function importItemData(batch) {
   for (key in sortedKeys)
     output.push(outputMap.get(sortedKeys[key]));
     
-  replaceContents_(targetSheet, output);
+  return output;
 }
 
 /** Import Voyage data into active sheet */
-function importVoyageData(batch) {
-  let targetSheet = getTargetSheet_("RawVoyageData", !batch);
+function importVoyageData_(data) {
   let output = [];
-  let data = importData_().player.character;
   let voyageData = data.voyage_descriptions[0];
   
   let skillTypeMap = new Map();
@@ -323,5 +338,8 @@ function importVoyageData(batch) {
                  voyager(i+1)]);
   }
   
-  replaceContents_(targetSheet, output);
+  return output;
+}
+
+function importEventData_(data, sheet) {
 }
