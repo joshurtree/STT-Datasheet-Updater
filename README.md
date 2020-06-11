@@ -11,19 +11,14 @@ Updates a Google sheet containing data exported from datacore.app.
 7. Reload the spreadsheet an additional menu call Import data will be added.
 
 ## Usage instructions
-### Importing crew data
+### Importing data
 1. Goto  https://texteditor.co and open the file you created on Google Drive.
-2. Replace the contents with code from https://stt.disruptorbeam.com/player.
-3. Select the sheet that contains the data exported from datacore.app.
-4. If a backup is needed the select Import Data -> Create backup sheet.
-5. Select Import Data -> Update crew data.
+2. Replace the contents with the latest code from https://stt.disruptorbeam.com/player.
+3. Select the sheet that will contain the data. (For Captain Idol's Datacore Analysis Sheet it is Datacore Import)
+4. Open the Import Data menu and select the data you want to import.
+5. All future imports will go to the same sheet. (If you want to change the sheet to import to then select Data -> Named ranges and delete the associated range).
 
-### Importing item data
-1. Goto  https://texteditor.co and open the file you created on Google Drive.
-2. Replace the contents with code from https://stt.disruptorbeam.com/player.
-3. Select the sheet where you want the data to go
-4. If a backup is needed the select Import Data -> Create backup sheet.
-5. Select Import Data -> Update item data
+Note. The crew data import is designed as a replacement for the data exported from https://datacore.app.
 
 ## Google authentication on first use
 Google requires you to review permissions when first using the code. After you sign in to your account it will give you a page that looks like.
@@ -32,3 +27,5 @@ Google requires you to review permissions when first using the code. After you s
 
 IF YOU TRUST THE CODE click on Advanced and then "Goto {{PROJECTNAME}} (unsafe)" to get to the permissions page. It will list all the permissions you will be allowing the code to use. If you happy that it won't destroy all your files then authorise them.
 
+## Known issues
+The code is currently unable to import frozen crew based on the data provided by Disruptor Beam. Any crew that are imported to the sheet while they are active and then subsequently frozen should be kept but there is no information on any crew already frozen when first importing to the sheet.
