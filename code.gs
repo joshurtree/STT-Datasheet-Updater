@@ -16,7 +16,7 @@ const IMPORT_FUNCS = [
   { name : 'event', func : importEventData_ }
 ];
 
-const doImport_ = (index) => importData_(IMPORT_FUNCS[0], fetchData_())
+const doImport_ = (index) => importData_(IMPORT_FUNCS[index], fetchData_())
 const crewDataImport = () => doImport_(0); 
 const itemDataImport = () => doImport_(1);
 const voyageDataImport = () => doImport_(2);
