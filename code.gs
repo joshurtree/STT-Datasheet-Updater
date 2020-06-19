@@ -308,7 +308,7 @@ function importItemData_(data) {
 /** Import Voyage data into active sheet */
 function importVoyageData_(data) {
   let output = [];
-  let voyageData = data.voyage_descriptions[0];
+  let voyageData = data.player.character.voyage_descriptions[0];
   
   let skillTypeMap = new Map();
   skillTypeMap.set(voyageData.skills.primary_skill, 'Primary');
@@ -318,7 +318,7 @@ function importVoyageData_(data) {
                                    .replace('doctor', 'Physician')
                                    .replace(/\b(\w)/g, c => c.toUpperCase());
   
-  let current = data.voyage[0];
+  let current = data.player.character.voyage[0];
   let voyager = current ? slot => current.crew_slots[slot].crew.name : slot => "None";
   
   output.push(["Voyage Status:", "", current ? current.state : "Not out", "", "", ""]);
