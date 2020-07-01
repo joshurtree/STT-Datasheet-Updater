@@ -325,20 +325,22 @@ function importVoyageData_(data) {
   output.push(['', '', '', '', '', '']);
   output.push(['Skill', 'Type', 'Trait 1', 'Voyager 1', 'Trait 2', 'Voyager 2']);
   
+  let skillRows = [];
   for (let i = 0; i < voyageData.crew_slots.length; i += 2) {
     let slot1 = voyageData.crew_slots[i];
     let slot2 = voyageData.crew_slots[i+1];
     let skill = slot1.skill;
     
-    output.push([skill.charAt(0).toUpperCase() + skill.slice(1, -6), 
-                 skillTypeMap.get(skill), 
-                 parseTrait(slot1.trait), 
-                 voyager(i),
-                 parseTrait(slot2.trait),
-                 voyager(i+1)]);
+    skillRows.push([skill.charAt(0).toUpperCase() + skill.slice(1, -6), 
+                    skillTypeMap.get(skill), 
+                    parseTrait(slot1.trait), 
+                    voyager(i),
+                    parseTrait(slot2.trait),
+                    voyager(i+1)]);
   }
   
-  return output;
+  skillRows.sort((a, b) => a[0].localeCompare(b[0]));
+  return [...output, ...skillRows];
 }
 
 function importEventData_(data, sheet) {
